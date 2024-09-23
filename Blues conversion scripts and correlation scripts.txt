@@ -1,0 +1,67 @@
+---
+title: "Som_PH_Comparison"
+output: html_document
+date: "2023-02-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(lme4)
+library(readxl)
+library(tidyr)
+library(pheatmap)
+```
+
+## Read and clean data
+
+```{r data, message=FALSE}
+df <- read_xlsx("~/Downloads/Blackshank_Summary of 2020 data_Sorghum_Height_Alldata.xlsx", 
+                sheet = "compare height_2020-08-31")
+colnames(df) <- c("s_number","pedigree","PI",
+                  "2020_field","block","rep",
+                  "year","ac_date_1","ac_date_2",
+                  "ph_1","ph_2","ph_3","ph_avg",
+                  "ph_drone","ph_robot_1",
+                  "ph_robot_2","range","row")
+df$block <- as.numeric(substr(df$block, start=1, stop=2))
+df$ph_avg <- as.numeric(df$ph_avg)
+df$ph_robot_2 <- as.numeric(df$ph_robot_2)
+df$ph_robot_avg <- rowMeans(df[,c("ph_robot_1","ph_robot_2")], 
+                            na.rm = T)
+```
+
+## BLUEs for manual, drone, and robot collected plant height (PH)
+
+```{r blues, message=FALSE}
+filtered_df <- df[!is.na(df$ph_avg),]
+fit1 <- lmer(ph_avg ~ PI +  rep + (1|range) + (1|row), data=filtered_df)
+blues1 <- fixef(fit1)
+
+filtered_df <- df[!is.na(df$ph_drone),]
+fit2 <- lmer(ph_drone ~ PI +  rep + (1|range) + (1|row), data=filtered_df)
+blues2 <- fixef(fit2)
+
+filtered_df <- df[!is.na(df$ph_robot_avg),]
+fit3 <- lmer(ph_robot_avg ~ PI +  rep + (1|range) + (1|row), data=filtered_df)
+blues3 <- fixef(fit3)
+```
+
+## Merge BLUEs and visualize
+
+```{r blues_observe, message=FALSE}
+phenotypes <- data.frame(Manual=blues1)
+phenotypes2 <- data.frame(Drone=blues2)
+phenotypes3 <- data.frame(Robot=blues3)
+
+first_merge <- merge(phenotypes, phenotypes2, by='row.names', all=T)
+rownames(first_merge) <- first_merge$Row.names
+first_merge <- first_merge[,2:3]
+final_pheno <- merge(first_merge, phenotypes3, by='row.names', all=T)
+
+write.csv(final_pheno, file="Blackshank_Sorghum_PH.csv", 
+          row.names = F, 
+          quote = F)
+pheatmap(cor(drop_na(final_pheno[2:4])), display_numbers = T, fontsize = 20)
+```
+
+
